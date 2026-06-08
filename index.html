@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Password Strength Analyzer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f2f2;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .wrapper {
+      background: #fff;
+      border-radius: 10px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    h1 { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 1.5rem; }
+    .input-row { display: flex; gap: 10px; margin-bottom: 1.25rem; }
+    #pw {
+      flex: 1; padding: 11px 14px;
+      border: 1.5px solid #ccc; border-radius: 6px;
+      font-size: 14px; color: #111; outline: none;
+      transition: border-color 0.2s; font-family: inherit;
+    }
+    #pw:focus { border-color: #2962ff; }
+    #pw::placeholder { color: #aaa; }
+    .btn {
+      padding: 11px 20px; background: #2962ff; color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; font-family: inherit;
+    }
+    .btn:hover { background: #1a4fd6; }
+    .btn:active { transform: scale(0.97); }
+    .bar-track {
+      height: 14px; background: #e8e8e8; border-radius: 4px;
+      border: 1.5px solid #ccc; overflow: hidden; margin-bottom: 12px;
+    }
+    .bar-fill {
+      height: 100%; width: 0%; background: #e53935;
+      border-radius: 4px; transition: width 0.4s ease, background 0.3s;
+    }
+    .result-text { font-size: 18px; font-weight: 700; color: #e53935; min-height: 26px; margin-bottom: 6px; }
+    .result-sub { font-size: 13px; color: #888; min-height: 18px; margin-bottom: 1.25rem; }
+    .suggestions {
+      text-align: left; background: #f8f8f8;
+      border: 1.5px solid #e8e8e8; border-radius: 8px;
+      padding: 14px 16px; display: none;
+    }
+    .suggestions.show { display: block; }
+    .sug-title {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #aaa; margin-bottom: 10px;
+    }
+    .sug-item {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13.5px; color: #555;
+      padding: 6px 0; border-bottom: 1px solid #efefef;
+    }
+    .sug-item:last-child { border-bottom: none; }
+    .sug-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-weak   { background: #e53935; }
+    .dot-medium { background: #f0a500; }
+    .dot-strong { background: #2e9e4f; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <h1>Password Strength Analyzer</h1>
+  <div class="input-row">
+    <input type="text" id="pw" placeholder="Enter Password" />
+    <button class="btn" onclick="checkNow()">Check Password</button>
+  </div>
+  <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+  <div class="result-text" id="resultText"></div>
+  <div class="result-sub" id="resultSub">Enter a password and click Check Password</div>
+  <div class="suggestions" id="sugBox">
+    <div class="sug-title" id="sugTitle"></div>
+    <div id="sugList"></div>
+  </div>
+</div>
+
+<script>
+  const latch = {};
+  for (let i = 1; i <= 11; i++) latch['c'+i] = false;
+
+  function smartLatch(id, met, unlockWhen) {
+    if (met) latch[id] = true;
+    else if (latch[id] && unlockWhen()) latch[id] = false;
+  }
+
+  let bestLevel = 0;
+
+  function checkNow() {
+    const pw   = document.getElementById('pw').value;
+    const len  = pw.length;
+    const nums = (pw.match(/\d/g) || []);
+    const spec = (pw.match(/[^a-zA-Z0-9]/g) || []);
+    const hasLet = /[a-zA-Z]/.test(pw);
+    const hasLow = /[a-z]/.test(pw);
+    const hasUp  = /[A-Z]/.test(pw);
+
+    if (!pw) {
+      for (let i = 1; i <= 11; i++) latch['c'+i] = false;
+      document.getElementById('barFill').style.width = '0%';
+      document.getElementById('resultText').textContent = '';
+      document.getElementById('resultSub').textContent = 'Enter a password and click Check Password';
+      document.getElementById('sugBox').classList.remove('show');
+      bestLevel = 0;
+      return;
+    }
+
+    // WEAK
+    smartLatch('c1', len >= 6,          () => len < 6);
+    smartLatch('c2', nums.length >= 1,  () => nums.length < 1);
+    smartLatch('c3', hasLet,            () => !hasLet);
+    const weak = latch.c1 && latch.c2 && latch.c3;
+
+    // MEDIUM
+    smartLatch('c4', len >= 10,         () => len < 10);
+    smartLatch('c5', hasLow,            () => !hasLow);
+    smartLatch('c6', spec.length >= 1,  () => spec.length < 1);
+    smartLatch('c7', nums.length >= 2,  () => nums.length < 2);
+    const med = latch.c4 && latch.c5 && latch.c6 && latch.c7;
+
+    // STRONG
+    smartLatch('c8',  len >= 10,         () => len < 10);
+    smartLatch('c9',  hasUp,             () => !hasUp);
+    smartLatch('c10', spec.length >= 2,  () => spec.length < 2);
+    smartLatch('c11', nums.length >= 4,  () => nums.length < 4);
+    const strong = latch.c8 && latch.c9 && latch.c10 && latch.c11;
+
+    if (strong && bestLevel < 3) bestLevel = 3;
+    else if (med && bestLevel < 2) bestLevel = 2;
+    else if (weak && bestLevel < 1) bestLevel = 1;
+
+    const fill = document.getElementById('barFill');
+    const rt   = document.getElementById('resultText');
+    const rs   = document.getElementById('resultSub');
+
+    if (bestLevel === 3) {
+      fill.style.width = '100%'; fill.style.background = '#2e9e4f';
+      rt.textContent = 'Strong Password'; rt.style.color = '#2e9e4f';
+      rs.textContent = 'Excellent! Your password is strong.';
+    } else if (bestLevel === 2) {
+      fill.style.width = '66%'; fill.style.background = '#f0a500';
+      rt.textContent = 'Medium Password'; rt.style.color = '#f0a500';
+      rs.textContent = 'Good, but could be stronger.';
+    } else if (bestLevel === 1) {
+      fill.style.width = '33%'; fill.style.background = '#e53935';
+      rt.textContent = 'Weak Password'; rt.style.color = '#e53935';
+      rs.textContent = 'Add more to make it stronger.';
+    } else {
+      fill.style.width = '10%'; fill.style.background = '#e53935';
+      rt.textContent = 'Weak Password'; rt.style.color = '#e53935';
+      rs.textContent = 'Password does not meet the required conditions.';
+    }
+
+    buildSuggestions(bestLevel);
+  }
+
+  function buildSuggestions(level) {
+    const sugBox   = document.getElementById('sugBox');
+    const sugList  = document.getElementById('sugList');
+    const sugTitle = document.getElementById('sugTitle');
+    sugList.innerHTML = '';
+
+    // Strong ஆச்சுன்னா suggestions வேண்டாம்
+    if (level === 3) {
+      sugBox.classList.remove('show');
+      return;
+    }
+
+    const tips = [];
+
+    if (level === 0 || level === 1) {
+      // Not yet weak OR just reached weak → show medium suggestions
+      sugTitle.textContent = 'To reach Medium password';
+      if (!latch.c4) tips.push({ text: 'Make it at least 10 characters long', dot: 'dot-medium' });
+      if (!latch.c5) tips.push({ text: 'Add a lowercase letter (a–z)', dot: 'dot-medium' });
+      if (!latch.c6) tips.push({ text: 'Add a special character like @, #, $, !', dot: 'dot-medium' });
+      if (!latch.c7) tips.push({ text: 'Use at least 2 numbers', dot: 'dot-medium' });
+    }
+
+    if (level === 2) {
+      // Medium ஆச்சு → show strong suggestions
+      sugTitle.textContent = 'To reach Strong password';
+      if (!latch.c8)  tips.push({ text: 'Keep it between 10 and 16 characters', dot: 'dot-strong' });
+      if (!latch.c9)  tips.push({ text: 'Add a capital letter (A–Z)', dot: 'dot-strong' });
+      if (!latch.c10) tips.push({ text: 'Add 2 special characters like @, #, $', dot: 'dot-strong' });
+      if (!latch.c11) tips.push({ text: 'Use at least 4 numbers', dot: 'dot-strong' });
+    }
+
+    if (tips.length === 0) {
+      sugBox.classList.remove('show');
+      return;
+    }
+
+    tips.forEach(t => {
+      const div = document.createElement('div');
+      div.className = 'sug-item';
+      div.innerHTML = `<span class="sug-dot ${t.dot}"></span><span>${t.text}</span>`;
+      sugList.appendChild(div);
+    });
+
+    sugBox.classList.add('show');
+  }
+
+  document.getElementById('pw').addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkNow();
+  });
+</script>
+</body>
+</html>
